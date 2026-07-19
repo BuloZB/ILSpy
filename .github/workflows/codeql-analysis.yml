@@ -25,7 +25,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
         persist-credentials: false
@@ -39,6 +39,8 @@ jobs:
       with:
         dotnet-version: '11.0.x'
         dotnet-quality: 'preview'
+        cache: true
+        cache-dependency-path: '**/packages.lock.json'
 
     - name: Build
       run: dotnet build ILSpy.XPlat.slnf --configuration Release -p:RestoreEnablePackagePruning=false

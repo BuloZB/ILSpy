@@ -136,6 +136,12 @@ namespace ICSharpCode.Decompiler.Tests
 		}
 
 		[Test]
+		public async Task TailCall()
+		{
+			await Run();
+		}
+
+		[Test]
 		public async Task CS1xSwitch_Debug()
 		{
 			await Run(settings: new DecompilerSettings { SwitchExpressions = false, FileScopedNamespaces = false });
@@ -262,6 +268,18 @@ namespace ICSharpCode.Decompiler.Tests
 		}
 
 		[Test]
+		public async Task SwitchOnStringNegativeCharIndex()
+		{
+			await Run();
+		}
+
+		[Test]
+		public async Task CachedReadOnlySpanFromLazyCache()
+		{
+			await Run();
+		}
+
+		[Test]
 		public async Task ConstantBlobs()
 		{
 			await Run();
@@ -274,6 +292,12 @@ namespace ICSharpCode.Decompiler.Tests
 		}
 
 		[Test]
+		public async Task StackAllocDuplicateStore()
+		{
+			await Run();
+		}
+
+		[Test, Platform("Win")] // UseLegacyAssembler requires the .NET Framework ilasm
 		public async Task Unsafe()
 		{
 			await Run(assemblerOptions: AssemblerOptions.Library | AssemblerOptions.UseLegacyAssembler);
@@ -339,6 +363,12 @@ namespace ICSharpCode.Decompiler.Tests
 			await Run();
 		}
 
+		[Test]
+		public async Task SortSwitchSections()
+		{
+			await Run(settings: new DecompilerSettings { SortSwitchSections = true, FileScopedNamespaces = false });
+		}
+
 		async Task Run([CallerMemberName] string testName = null, DecompilerSettings settings = null,
 			AssemblerOptions assemblerOptions = AssemblerOptions.Library)
 		{
@@ -365,7 +395,7 @@ namespace ICSharpCode.Decompiler.Tests
 			{
 				if (File.Exists(Path.Combine(TestCasePath, "FSharp.Core.dll")))
 					return;
-				string fsharpCoreDll = Path.Combine(TestCasePath, "..\\..\\..\\ILSpy-tests\\FSharp\\FSharp.Core.dll");
+				string fsharpCoreDll = Path.Combine(TestCasePath, "..", "..", "..", "ILSpy-tests", "FSharp", "FSharp.Core.dll");
 				if (!File.Exists(fsharpCoreDll))
 					Assert.Ignore("Ignored because of missing ILSpy-tests repo. Must be checked out separately from https://github.com/icsharpcode/ILSpy-tests!");
 				File.Copy(fsharpCoreDll, Path.Combine(TestCasePath, "FSharp.Core.dll"));

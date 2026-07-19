@@ -177,16 +177,10 @@ namespace ICSharpCode.Decompiler
 				extensionMembers = false;
 				firstClassSpanTypes = false;
 			}
-			if (languageVersion < CSharp.LanguageVersion.CSharp15_0)
-			{
-				runtimeAsync = false;
-			}
 		}
 
 		public CSharp.LanguageVersion GetMinimumRequiredVersion()
 		{
-			if (runtimeAsync)
-				return CSharp.LanguageVersion.CSharp15_0;
 			if (extensionMembers || firstClassSpanTypes)
 				return CSharp.LanguageVersion.CSharp14_0;
 			if (paramsCollections)
@@ -1357,6 +1351,20 @@ namespace ICSharpCode.Decompiler
 			}
 		}
 
+		bool expandXmlDocumentationComments = false;
+
+		[Browsable(false)]
+		public bool ExpandXmlDocumentationComments {
+			get { return expandXmlDocumentationComments; }
+			set {
+				if (expandXmlDocumentationComments != value)
+				{
+					expandXmlDocumentationComments = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
 		bool expandMemberDefinitions = false;
 
 		[Browsable(false)]
@@ -2204,24 +2212,6 @@ namespace ICSharpCode.Decompiler
 			}
 		}
 
-		bool runtimeAsync = true;
-
-		/// <summary>
-		/// Gets/Sets whether runtime async should be used.
-		/// </summary>
-		[Category("C# 15.0 / VS 202x.yy")]
-		[Description("DecompilerSettings.RuntimeAsync")]
-		public bool RuntimeAsync {
-			get { return runtimeAsync; }
-			set {
-				if (runtimeAsync != value)
-				{
-					runtimeAsync = value;
-					OnPropertyChanged();
-				}
-			}
-		}
-
 		bool separateLocalVariableDeclarations = false;
 
 		/// <summary>
@@ -2370,6 +2360,26 @@ namespace ICSharpCode.Decompiler
 				if (sortCustomAttributes != value)
 				{
 					sortCustomAttributes = value;
+					OnPropertyChanged();
+				}
+			}
+		}
+
+		bool sortSwitchSections = false;
+
+		/// <summary>
+		/// Sort switch sections by their label value instead of by IL offset.
+		/// Useful when diffing decompiler output across rebuilds of obfuscated assemblies,
+		/// where IL block layout is unstable but the case-to-value mapping is not.
+		/// </summary>
+		[Category("DecompilerSettings.Other")]
+		[Description("DecompilerSettings.SortSwitchSections")]
+		public bool SortSwitchSections {
+			get { return sortSwitchSections; }
+			set {
+				if (sortSwitchSections != value)
+				{
+					sortSwitchSections = value;
 					OnPropertyChanged();
 				}
 			}
