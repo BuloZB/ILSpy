@@ -55,8 +55,10 @@ public class NetFrameworkProcessesTests
 		File.Exists(WindowsPowerShellPath).Should().BeTrue(
 			"Windows PowerShell 5.1 is the .NET Framework process this fixture inspects");
 
+		// The host lives exactly as long as the test host process: no wall clock for a slow
+		// machine to outrun mid-fixture, and no orphan if the teardown never runs.
 		host = Process.Start(new ProcessStartInfo(WindowsPowerShellPath,
-			"-NoProfile -NonInteractive -Command \"Start-Sleep -Seconds 300\"") {
+			$"-NoProfile -NonInteractive -Command \"Wait-Process -Id {Environment.ProcessId}\"") {
 			UseShellExecute = false,
 			CreateNoWindow = true,
 		});
@@ -141,8 +143,16 @@ public class NetFrameworkProcessesTests
 	{
 		var modules = NetFrameworkProcesses.GetModules(host!.Id);
 
-		modules.Should().Contain(m => IsAssembly(m, "System.Management.Automation"),
-			"PowerShell's own assembly is loaded from the GAC, not from beside the exe");
+		// The GAC and its NGen cache live under %windir%\assembly; an entry from there proves
+		// the scan reports what the loader actually used, not merely files beside the exe.
+		// PowerShell's own assemblies cannot serve as that witness: they are IL-only, and an
+		// IL-only assembly appears in the OS module list only while its NGen native image is
+		// valid - right after a .NET Framework servicing update it silently is not, and the
+		// runtime falls back to a memory-mapped IL load this path cannot see.
+		string gac = Path.Combine(
+			Environment.GetFolderPath(Environment.SpecialFolder.Windows), "assembly");
+		modules.Should().Contain(m => m.Path!.StartsWith(gac, StringComparison.OrdinalIgnoreCase),
+			"the framework assemblies of a desktop CLR process are loaded from the GAC, not from beside the exe");
 
 		// The OS module list mixes native libraries in, and clr.dll is the very entry that
 		// identified the process - so this proves the filtering runs, not merely that it exists.

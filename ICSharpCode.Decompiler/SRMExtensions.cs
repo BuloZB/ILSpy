@@ -474,13 +474,27 @@ namespace ICSharpCode.Decompiler
 			}
 		}
 
+		/// <summary>
+		/// See NRExtensions.HasOnlyReadOnlyProperties: an anonymous type with a settable property
+		/// cannot be written as a C# anonymous type, so its declaration must not be hidden.
+		/// </summary>
+		static bool HasOnlyReadOnlyProperties(TypeDefinition type, MetadataReader metadata)
+		{
+			foreach (var handle in type.GetProperties())
+			{
+				if (!metadata.GetPropertyDefinition(handle).GetAccessors().Setter.IsNil)
+					return false;
+			}
+			return true;
+		}
+
 		public static bool IsAnonymousType(this TypeDefinition type, MetadataReader metadata)
 		{
 			string name = metadata.GetString(type.Name);
 			if (type.Namespace.IsNil && type.HasGeneratedName(metadata)
 				&& (name.Contains("AnonType") || name.Contains("AnonymousType")))
 			{
-				return type.IsCompilerGenerated(metadata);
+				return type.IsCompilerGenerated(metadata) && HasOnlyReadOnlyProperties(type, metadata);
 			}
 			return false;
 		}
@@ -489,9 +503,20 @@ namespace ICSharpCode.Decompiler
 
 		public static bool IsGeneratedName(this StringHandle handle, MetadataReader metadata)
 		{
-			return !handle.IsNil
-				&& (metadata.GetString(handle).StartsWith("<", StringComparison.Ordinal)
-				|| metadata.GetString(handle).Contains("$"));
+			return !handle.IsNil && IsGeneratedName(metadata.GetString(handle));
+		}
+
+		/// <summary>
+		/// Detects the mangled names compilers give to entities that have no user-written
+		/// declaration. The C# compiler prefixes them with '&lt;', the VB compiler separates
+		/// the parts with '$' (VB$AnonymousType_0, VB$StateMachine_1_Foo). Neither character
+		/// is legal in a C# or VB identifier.
+		/// Note that a name may legitimately contain '&lt;' without being generated: explicit
+		/// implementations of generic interface members are named after the interface.
+		/// </summary>
+		internal static bool IsGeneratedName(string name)
+		{
+			return name.StartsWith("<", StringComparison.Ordinal) || name.Contains("$");
 		}
 
 		public static bool HasGeneratedName(this MethodDefinitionHandle handle, MetadataReader metadata)

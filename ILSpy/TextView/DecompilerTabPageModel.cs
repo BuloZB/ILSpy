@@ -103,6 +103,7 @@ namespace ICSharpCode.ILSpy.TextView
 		/// in the header while this is set.
 		/// </summary>
 		[ObservableProperty]
+		[NotifyPropertyChangedFor(nameof(ProgressBarIsIndeterminate))]
 		private bool isDecompiling;
 
 		/// <summary>
@@ -120,7 +121,16 @@ namespace ICSharpCode.ILSpy.TextView
 		/// off so the bar becomes determinate; an in-place decompile leaves it on.
 		/// </summary>
 		[ObservableProperty]
+		[NotifyPropertyChangedFor(nameof(ProgressBarIsIndeterminate))]
 		private bool progressIsIndeterminate = true;
+
+		/// <summary>
+		/// What the progress bar binds its IsIndeterminate to: indeterminate mode, but only while a
+		/// decompilation is running. The indeterminate indicator is an infinite animation, and it
+		/// keeps running - and keeps the view alive through the render clock - for as long as the
+		/// pseudo-class is set, whether the bar is visible or not.
+		/// </summary>
+		public bool ProgressBarIsIndeterminate => IsDecompiling && ProgressIsIndeterminate;
 
 		/// <summary>Total units to process (the project's file count) for the determinate bar.</summary>
 		[ObservableProperty]
@@ -385,6 +395,7 @@ namespace ICSharpCode.ILSpy.TextView
 		int? pendingHighlightStep;
 		bool pendingIsDebug;
 
+
 		/// <summary>
 		/// Output-length safety limits (characters): a decompile that produces more than the active
 		/// limit is stopped and replaced with a "too much code" message rather than hanging/OOMing the
@@ -549,6 +560,10 @@ namespace ICSharpCode.ILSpy.TextView
 				var stepLimit = pendingStepLimit;
 				var highlightStep = pendingHighlightStep;
 				var isDebug = pendingIsDebug;
+				// Unlike the per-run overrides above, this is not reset: it describes the tab, and
+				// every run has to record the same way or a step index picked from one tree would
+				// select a different step on replay.
+				var recordSteps = AppEnv.AppComposition.TryGetExport<Docking.DockWorkspace>()?.RecordSteps ?? false;
 				pendingStepLimit = int.MaxValue;
 				pendingHighlightStep = null;
 				pendingIsDebug = false;
@@ -570,6 +585,7 @@ namespace ICSharpCode.ILSpy.TextView
 							StepLimit = stepLimit,
 							HighlightStep = highlightStep,
 							IsDebug = isDebug,
+							RecordSteps = recordSteps,
 						};
 						try
 						{
@@ -595,8 +611,10 @@ namespace ICSharpCode.ILSpy.TextView
 						catch (Exception ex)
 						{
 							output.WriteLine();
-							output.WriteLine("/* Decompilation failed:");
-							output.WriteLine(ex.ToString());
+							output.WriteLine("/* Decompilation failed: " + ex.Message);
+							// The trace goes in a collapsed fold: what the reader needs is the message,
+							// and the frames only when they go looking for them.
+							output.WriteExceptionDetails(ex);
 							output.WriteLine("*/");
 						}
 						return (output, cts.Token);

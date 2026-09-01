@@ -676,6 +676,9 @@ namespace ICSharpCode.Decompiler.IL.Transforms
 			// Exactly one of resultVariable/leaveTarget must be null
 			if ((resultVariable == null) == (leaveTarget == null))
 				return;
+			// C# has no ref-returning switch expression: an arm cannot be `0 => ref x`.
+			if (resultType == StackType.Ref)
+				return;
 			if (switchInst.Value is StringToInt str2int)
 			{
 				// validate that each integer is used for exactly one value

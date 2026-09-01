@@ -193,11 +193,10 @@ namespace ICSharpCode.ILSpy.TextView
 			uiElementGenerator = new UIElementGenerator();
 			Editor.TextArea.TextView.ElementGenerators.Add(uiElementGenerator);
 
-			// Reference navigation fires on pointer-RELEASE without drag (WPF parity: the WPF
-			// view used TextArea.PreviewMouseDown/Up the same way), so a press-and-drag over a
-			// link starts a text selection instead of navigating away. The press handler only
-			// records the start position, so tunnel routing (before AvaloniaEdit consumes the
-			// press) is fine.
+			// Reference navigation fires on pointer-RELEASE without drag, so a press-and-drag
+			// over a link starts a text selection instead of navigating away. The press handler
+			// only records the start position, so tunnel routing (before AvaloniaEdit consumes
+			// the press) is fine.
 			Editor.TextArea.AddHandler(InputElement.PointerPressedEvent,
 				OnTextAreaPointerPressedForReferenceClick,
 				RoutingStrategies.Tunnel,
@@ -422,7 +421,7 @@ namespace ICSharpCode.ILSpy.TextView
 			if (currentDisplaySettings == null)
 				return;
 			var step = e.Delta.Y > 0 ? (System.Func<double, double>)EditorZoom.ZoomIn : EditorZoom.ZoomOut;
-			currentDisplaySettings.SelectedFontSize = step(currentDisplaySettings.SelectedFontSize);
+			currentDisplaySettings.EditorZoomFactor = step(currentDisplaySettings.EditorZoomFactor);
 			e.Handled = true;
 		}
 
@@ -556,17 +555,17 @@ namespace ICSharpCode.ILSpy.TextView
 			{
 				case Key.OemPlus:
 				case Key.Add:
-					currentDisplaySettings.SelectedFontSize = EditorZoom.ZoomIn(currentDisplaySettings.SelectedFontSize);
+					currentDisplaySettings.EditorZoomFactor = EditorZoom.ZoomIn(currentDisplaySettings.EditorZoomFactor);
 					e.Handled = true;
 					break;
 				case Key.OemMinus:
 				case Key.Subtract:
-					currentDisplaySettings.SelectedFontSize = EditorZoom.ZoomOut(currentDisplaySettings.SelectedFontSize);
+					currentDisplaySettings.EditorZoomFactor = EditorZoom.ZoomOut(currentDisplaySettings.EditorZoomFactor);
 					e.Handled = true;
 					break;
 				case Key.D0:
 				case Key.NumPad0:
-					currentDisplaySettings.SelectedFontSize = EditorZoom.Reset();
+					currentDisplaySettings.EditorZoomFactor = EditorZoom.Reset();
 					e.Handled = true;
 					break;
 			}
@@ -843,6 +842,13 @@ namespace ICSharpCode.ILSpy.TextView
 			return false;
 		}
 
+		// The last line the one-shot navigation highlight was played on in this view, or null when
+		// none has played yet. The adorner itself self-dismisses after its ~800 ms lifetime, so an
+		// observer polling the renderer collection can miss the entire play when the dispatcher
+		// stalls (a headless test on a loaded CI runner); this record is the persistent evidence
+		// that the highlight ran, and where.
+		internal int? LastHighlightPlayedLine { get; private set; }
+
 		void ScrollToLine(int line, Bookmarks.BookmarkViewState? viewState = null)
 		{
 			var document = Editor.Document;
@@ -862,6 +868,7 @@ namespace ICSharpCode.ILSpy.TextView
 					RestoreBookmarkFoldings(viewState);
 				CenterLineInView(document, line);
 				LineHighlightAdorner.DisplayLineHighlight(Editor.TextArea, line);
+				LastHighlightPlayedLine = line;
 				bookmarkMargin?.PulseLine(line);
 			}, DispatcherPriority.Background);
 		}

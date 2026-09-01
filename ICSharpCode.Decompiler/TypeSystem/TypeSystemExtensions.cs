@@ -55,6 +55,31 @@ namespace ICSharpCode.Decompiler.TypeSystem
 		}
 
 		/// <summary>
+		/// Returns <paramref name="interfaceType"/> as <paramref name="implementingType"/> implements it -
+		/// the entry from its base-type list - falling back to <paramref name="interfaceType"/> itself.
+		/// </summary>
+		/// <remarks>
+		/// Tuple element names and nullability are not part of a type's identity, so an interface resolved
+		/// through one of its members carries neither; the implementing type's base-type list is where they
+		/// are recorded. Naming an explicit interface implementation requires the spelling from that list -
+		/// C# rejects <c>void I&lt;(int, int)&gt;.M()</c> on a type declared as <c>I&lt;(int A, int B)&gt;</c>
+		/// with CS0540. At most one base type can match, because implementing two interfaces that differ
+		/// only in tuple element names or nullability is itself an error (CS8140, CS8645).
+		/// </remarks>
+		internal static IType GetInterfaceAsImplementedBy(this IType interfaceType, IType implementingType)
+		{
+			foreach (var baseType in implementingType.GetAllBaseTypes())
+			{
+				if (baseType.Kind == TypeKind.Interface
+					&& NormalizeTypeVisitor.IgnoreNullabilityAndTuples.EquivalentTypes(baseType, interfaceType))
+				{
+					return baseType;
+				}
+			}
+			return interfaceType;
+		}
+
+		/// <summary>
 		/// Gets all non-interface base types.
 		/// </summary>
 		/// <remarks>
@@ -667,6 +692,65 @@ namespace ICSharpCode.Decompiler.TypeSystem
 		}
 		#endregion
 
+		#region Lifetime annotations
+		internal static bool IsRefLikeOrAllowsRefLikeType(this IType type)
+		{
+			return type.IsByRefLike
+				|| type is ITypeParameter { AllowsRefLikeType: true };
+		}
+
+		/// <summary>
+		/// Gets the parameter's effective scope after applying implicit scope rules and
+		/// <c>UnscopedRefAttribute</c>.
+		/// </summary>
+		internal static ScopedKind GetEffectiveScope(this IParameter parameter)
+		{
+			LifetimeAnnotation lifetime = parameter.Lifetime;
+			if (lifetime.HasUnscopedRefAttribute)
+				return ScopedKind.None;
+
+			if (lifetime.DeclaredScope != ScopedKind.None)
+				return lifetime.DeclaredScope;
+
+			if (parameter.Owner?.ParentModule is MetadataModule module)
+			{
+				if ((module.TypeSystemOptions & TypeSystemOptions.ScopedRef) == 0)
+					return ScopedKind.None;
+
+				if (module.UseUpdatedEscapeRules && parameter.ReferenceKind == ReferenceKind.Out)
+					return ScopedKind.ScopedRef;
+			}
+
+			if (parameter.IsParams && parameter.Type.IsRefLikeOrAllowsRefLikeType())
+				return ScopedKind.ScopedValue;
+
+			return ScopedKind.None;
+		}
+
+		/// <summary>
+		/// Gets the effective scope of the implicit <c>this</c> parameter.
+		/// </summary>
+		internal static ScopedKind GetThisParameterScope(this IMethod method)
+		{
+			if (method.IsStatic || method.DeclaringTypeDefinition?.Kind != TypeKind.Struct)
+				return ScopedKind.None;
+
+			if (method.ParentModule is MetadataModule module)
+			{
+				if ((module.TypeSystemOptions & TypeSystemOptions.ScopedRef) == 0)
+					return ScopedKind.None;
+
+				bool hasUnscopedRefAttribute = method.HasAttribute(KnownAttribute.UnscopedRef)
+					|| method.AccessorOwner is IProperty property
+						&& property.HasAttribute(KnownAttribute.UnscopedRef);
+				if (hasUnscopedRefAttribute && module.UseUpdatedEscapeRules)
+					return ScopedKind.None;
+			}
+
+			return ScopedKind.ScopedRef;
+		}
+		#endregion
+
 		#region IParameter.IsDefaultValueAssignmentAllowed
 		/// <summary>
 		/// Checks if the parameter is allowed to be assigned a default value.
@@ -741,11 +825,11 @@ namespace ICSharpCode.Decompiler.TypeSystem
 			{
 				return ((ConversionResolveResult)rr).Input.GetSymbol();
 			}
-			else if (rr is CSharp.Resolver.DynamicMemberResolveResult dynamicMember)
+			else if (rr is DynamicMemberResolveResult dynamicMember)
 			{
 				return dynamicMember.Symbol;
 			}
-			else if (rr is CSharp.Resolver.DynamicInvocationResolveResult dynamicInvocation)
+			else if (rr is DynamicInvocationResolveResult dynamicInvocation)
 			{
 				return dynamicInvocation.Symbol;
 			}

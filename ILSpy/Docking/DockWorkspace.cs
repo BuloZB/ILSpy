@@ -84,6 +84,15 @@ namespace ICSharpCode.ILSpy.Docking
 		/// behaviour (e.g. ShowOptionsCommand).</summary>
 		public IDocumentDock? Documents => factory.Documents;
 
+		/// <summary>
+		/// Whether decompiles started in this workspace record their transform steps. Set on the UI
+		/// thread by whoever displays them and copied into each run's <see cref="DecompilationOptions"/>,
+		/// so a background decompile never samples live view state - and every tab, including ones
+		/// opened later, records the same way. A step index only means anything against a run
+		/// recorded like the one the index was taken from.
+		/// </summary>
+		public bool RecordSteps { get; set; }
+
 		public IRelayCommand NavigateBackCommand { get; }
 		public IRelayCommand NavigateForwardCommand { get; }
 		public IRelayCommand<NavigationEntry> NavigateToHistoryCommand { get; }
@@ -224,7 +233,7 @@ namespace ICSharpCode.ILSpy.Docking
 				documentsNotify.PropertyChanged += OnDocumentsPropertyChanged;
 			// Close orphaned carve-out tabs when their assembly is removed. The persistent
 			// MainTab slot is left alone — its content will swap to whatever the user selects
-			// next via the assembly tree. Mirrors WPF's DockWorkspace.CurrentAssemblyList_Changed.
+			// next via the assembly tree.
 			ICSharpCode.ILSpy.Util.MessageBus<ICSharpCode.ILSpy.Util.CurrentAssemblyListChangedEventArgs>.Subscribers
 				+= OnAssemblyListChanged;
 			ICSharpCode.ILSpy.AppEnv.AppLog.Mark("DockWorkspace ctor exited");
@@ -235,7 +244,7 @@ namespace ICSharpCode.ILSpy.Docking
 			var inner = e.Inner;
 
 			// On Reset (assembly list wholesale-cleared), drop ALL history — every entry is
-			// stale by definition. Mirrors WPF's assemblyList_CollectionChanged.
+			// stale by definition.
 			if (inner.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
 			{
 				PruneHistoryAfterAssemblyListChange(removed: null);
@@ -596,7 +605,11 @@ namespace ICSharpCode.ILSpy.Docking
 			suppressHistoryRecording = true;
 			try
 			{
-				if (factory.Documents?.VisibleDockables is { } docs && docs.Contains(target.Tab))
+				// Only activate a tab that is not already active: Dock's ActiveDockable setter re-runs
+				// InitActiveDockable -> SetFocusedDockable even for an unchanged value, which would
+				// move the active pane to the document on every navigation.
+				if (factory.Documents is { VisibleDockables: { } docs } documents
+					&& docs.Contains(target.Tab) && !ReferenceEquals(documents.ActiveDockable, target.Tab))
 					factory.SetActiveDockable(target.Tab);
 				if (target is TreeNodeEntry treeNode)
 				{
@@ -712,8 +725,7 @@ namespace ICSharpCode.ILSpy.Docking
 		/// the tree isn't rebuilt and the SelectedItem reference is preserved, so the
 		/// normal selection-change cascade would no-op and the editor would keep stale
 		/// decompiled text. Resetting <c>lastShownNodes</c> defeats the
-		/// dedup short-circuit inside <see cref="ShowSelectedNode"/>. Mirrors WPF's
-		/// <c>RefreshDecompiledView()</c> call.
+		/// dedup short-circuit inside <see cref="ShowSelectedNode"/>.
 		/// </summary>
 		public void ForceRefreshActiveTab()
 		{
